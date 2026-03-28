@@ -690,15 +690,18 @@ internal static class ExportTransforms
 
     public static DerivedExplorationDto SummarizeExploration(IReadOnlyList<FastTravelPointRawDto> fastTravelPoints)
     {
-        const int assumedTotalFt = 50;
+        // Real saves often expose more fast-travel rows than the old fixed denominator, which saturated a literal
+        // ratio at 1.0 and read like map completion. Use a soft bounded curve so the field stays a progression proxy.
         var n = fastTravelPoints.Count;
-        var ratio = Math.Min(1.0, n / (double)assumedTotalFt);
+        const int proxyReferenceCount = 200;
+        var proxy = Math.Sqrt(Math.Min(1.0, n / (double)proxyReferenceCount));
+        var progressProxy = Math.Round(proxy, 3);
         return new DerivedExplorationDto
         {
-            EstimatedCoverage = Math.Round(ratio, 3),
+            ProgressProxy = progressProxy,
             FastTravelPointCount = n,
-            AssumedTotalFastTravelPoints = assumedTotalFt,
-            Interpretation = "proxy_fast_travel_based",
+            ProxyReferenceCount = proxyReferenceCount,
+            Interpretation = "fast_travel_unlock_progress_proxy",
             Confidence = "low",
         };
     }

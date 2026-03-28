@@ -365,16 +365,16 @@ public sealed class DerivedBuildProfileDto
 
 public sealed class DerivedExplorationDto
 {
-    /// <summary>0–1 heuristic from unlocked fast-travel point count.</summary>
-    public double EstimatedCoverage { get; init; }
+    /// <summary>Bounded heuristic progression proxy from unlocked fast-travel count; not map completion.</summary>
+    public double ProgressProxy { get; init; }
 
     /// <summary>Unlocked fast-travel nodes counted by exporter (raw list length).</summary>
     public int FastTravelPointCount { get; init; }
 
-    /// <summary>Heuristic denominator for coverage ratio; not a game data total.</summary>
-    public int AssumedTotalFastTravelPoints { get; init; } = 50;
+    /// <summary>Reference count used only for the bounded proxy formula; not canonical game truth.</summary>
+    public int ProxyReferenceCount { get; init; } = 200;
 
-    /// <summary>Heuristic AI-facing note: coverage is a fast-travel unlock proxy, not map completion.</summary>
+    /// <summary>Heuristic AI-facing note: progress is inferred from fast-travel unlock volume, not actual area completion.</summary>
     public string Interpretation { get; init; } = "";
 
     /// <summary>Heuristic AI-facing confidence for exploration proxy fields.</summary>
