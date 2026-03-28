@@ -45,9 +45,9 @@ internal static class Program
 
         try
         {
+            // Older WolvenKit: HashService loads embedded pools synchronously in the constructor (no Task Loaded).
             Console.Error.WriteLine("Initializing hash / string resolution (WolvenKit.Common)...");
             hashService = new HashService();
-            await hashService.Loaded.ConfigureAwait(false);
 
             Console.Error.WriteLine("Loading TweakDB string sidecar (optional CRC-based map; parallel to HashService pools)...");
             using (var tweakStream = typeof(HashService).Assembly.GetManifestResourceStream("WolvenKit.Common.Resources.tweakdbstr.kark"))
