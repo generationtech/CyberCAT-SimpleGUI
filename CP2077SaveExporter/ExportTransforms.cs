@@ -682,16 +682,24 @@ internal static class ExportTransforms
             Gigs = new CompletionQuestBucketDto { Completed = gigC, InProgress = gigP },
             InProgressInterpretation = "approximate",
             InProgressConfidence = "low",
+            CompletionInterpretation = "counts_reflect_detected_flags_not_full_quest_set",
+            CompletionConfidence = "low",
+            HasActiveQuestSignals = mainP + sideP + gigP > 0,
         };
     }
 
     public static DerivedExplorationDto SummarizeExploration(IReadOnlyList<FastTravelPointRawDto> fastTravelPoints)
     {
+        const int assumedTotalFt = 50;
         var n = fastTravelPoints.Count;
-        var ratio = Math.Min(1.0, n / 50.0);
+        var ratio = Math.Min(1.0, n / (double)assumedTotalFt);
         return new DerivedExplorationDto
         {
             EstimatedCoverage = Math.Round(ratio, 3),
+            FastTravelPointCount = n,
+            AssumedTotalFastTravelPoints = assumedTotalFt,
+            Interpretation = "proxy_fast_travel_based",
+            Confidence = "low",
         };
     }
 
@@ -783,6 +791,24 @@ internal static class ExportTransforms
             }
         }
 
+        string confidence;
+        if (!detected)
+        {
+            confidence = "low";
+        }
+        else if (ftEp1 > 0 && progressionSignals >= 5)
+        {
+            confidence = "high";
+        }
+        else if (ftEp1 > 0 || progressionSignals >= 5 || questSignals.NamedFactsEp1Hint >= 3)
+        {
+            confidence = "medium";
+        }
+        else
+        {
+            confidence = "low";
+        }
+
         return new PhantomLibertySignalsDto
         {
             Detected = detected,
@@ -790,6 +816,8 @@ internal static class ExportTransforms
             FastTravelUnlocked = ftEp1,
             LikelyStarted = likelyStarted,
             LikelyProgressLevel = level,
+            Interpretation = "heuristic_signal_based",
+            Confidence = confidence,
         };
     }
 
@@ -809,12 +837,15 @@ internal static class ExportTransforms
         int? level,
         ulong? moneyQuantity)
     {
+        // Capability-style counts use first row per TweakDbIdUlong so duplicate stacks do not inflate programs/OS/iconic tallies.
+        var dedupedForCapability = FirstRowPerTweakDbId(rows);
+
         var qhProg = 0;
         var qhMat = 0;
         var osCount = 0;
         var iconic = 0;
         var craftingStacks = 0;
-        foreach (var row in rows)
+        foreach (var row in dedupedForCapability)
         {
             var id = InventoryItemIdLower(row);
             if (id.Contains("iconic", StringComparison.Ordinal))
@@ -836,7 +867,11 @@ internal static class ExportTransforms
             {
                 qhProg++;
             }
+        }
 
+        // Wealth thresholds: still count crafting category rows (stack-level), not distinct item types.
+        foreach (var row in rows)
+        {
             if (string.Equals(row.InferredCategory, "Crafting", StringComparison.Ordinal))
             {
                 craftingStacks++;
@@ -866,6 +901,20 @@ internal static class ExportTransforms
             upgradeReadiness = "medium";
         }
 
+        var buildFocus = "generalist";
+        if (qhProg >= 3 && osCount >= 1)
+        {
+            buildFocus = "netrunner_capable";
+        }
+        else if (craftingStacks >= 10 && money > 35000UL)
+        {
+            buildFocus = "crafting_ready";
+        }
+        else if (iconic >= 3)
+        {
+            buildFocus = "gear_progression_focus";
+        }
+
         return new DerivedInventoryInsightsDto
         {
             HasQuickhacks = hasQh,
@@ -876,7 +925,26 @@ internal static class ExportTransforms
             IconicItemCount = iconic,
             MaterialWealth = materialWealth,
             UpgradeReadiness = upgradeReadiness,
+            Interpretation = "inventory_signal_based",
+            Confidence = "medium",
+            BuildCapabilityFocus = buildFocus,
         };
+    }
+
+    /// <summary>First occurrence per <see cref="InventoryItemNormalizedDto.TweakDbIdUlong"/> (order-preserving).</summary>
+    private static List<InventoryItemNormalizedDto> FirstRowPerTweakDbId(IReadOnlyList<InventoryItemNormalizedDto> rows)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var list = new List<InventoryItemNormalizedDto>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (seen.Add(row.TweakDbIdUlong))
+            {
+                list.Add(row);
+            }
+        }
+
+        return list;
     }
 
     private static string InventoryItemIdLower(InventoryItemNormalizedDto row)
@@ -1010,14 +1078,19 @@ internal static class ExportTransforms
         var util = possible <= 0
             ? 0.0
             : Math.Min(1.0, cyberwareSlotRowCount / (double)possible);
+        var utilRounded = Math.Round(util, 3);
+        var investment = utilRounded < 0.30 ? "low" : utilRounded < 0.70 ? "medium" : "high";
 
         return new DerivedEquipmentMaturityDto
         {
             AverageTier = avgTier,
             CyberwareSlotsUsed = cyberwareSlotRowCount,
             CyberwareSlotsPossible = possible,
-            CyberwareUtilizationRatio = Math.Round(util, 3),
+            CyberwareUtilizationRatio = utilRounded,
             UpgradePotential = potential,
+            CyberwareInvestmentLevel = investment,
+            Interpretation = "slot_utilization_based",
+            Confidence = "medium",
         };
     }
 

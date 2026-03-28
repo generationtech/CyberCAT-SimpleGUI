@@ -262,6 +262,15 @@ public sealed class DerivedCompletionDto
 
     /// <summary>low | medium | high — confidence in inProgress totals only.</summary>
     public string InProgressConfidence { get; init; } = "low";
+
+    /// <summary>Heuristic AI-facing note: completed/in-progress tallies are signal counts from detected fact-name patterns, not a full quest catalog.</summary>
+    public string CompletionInterpretation { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing confidence for how literally completion buckets should be read (not statistical certainty).</summary>
+    public string CompletionConfidence { get; init; } = "low";
+
+    /// <summary>True when any main/side/gig bucket has a positive in-progress heuristic count (active/start style flags present).</summary>
+    public bool HasActiveQuestSignals { get; init; }
 }
 
 public sealed class CompletionQuestBucketDto
@@ -287,6 +296,12 @@ public sealed class PhantomLibertySignalsDto
     public int FastTravelUnlocked { get; init; }
     public bool LikelyStarted { get; init; }
     public string LikelyProgressLevel { get; init; } = "none";
+
+    /// <summary>Heuristic AI-facing label: expansion signals are inferred from quest/fact and fast-travel hints, not a direct EP1 progress readout.</summary>
+    public string Interpretation { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing confidence (low | medium | high) from evidence strength, not proof of installation state.</summary>
+    public string Confidence { get; init; } = "low";
 }
 
 public sealed class DerivedInventoryInsightsDto
@@ -303,6 +318,15 @@ public sealed class DerivedInventoryInsightsDto
 
     /// <summary>low | medium | high — level + crafting + cash heuristic.</summary>
     public string UpgradeReadiness { get; init; } = "low";
+
+    /// <summary>Heuristic AI-facing note: inventory-derived tags from item id/category signals, not build planner truth.</summary>
+    public string Interpretation { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing confidence for inventory insight fields as a whole.</summary>
+    public string Confidence { get; init; } = "medium";
+
+    /// <summary>Heuristic AI-facing intent label from quickhack/OS/iconic/crafting/money signals (coarse archetype hint).</summary>
+    public string BuildCapabilityFocus { get; init; } = "";
 }
 
 public sealed class DerivedEquipmentMaturityDto
@@ -317,6 +341,15 @@ public sealed class DerivedEquipmentMaturityDto
     public double CyberwareUtilizationRatio { get; init; }
 
     public string UpgradePotential { get; init; } = "low";
+
+    /// <summary>Heuristic AI-facing bucket (low | medium | high) from slot fill ratio, not clinical assessment.</summary>
+    public string CyberwareInvestmentLevel { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing note: maturity labels derive from slot utilization and item text tiers.</summary>
+    public string Interpretation { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing confidence for cyberware utilization framing.</summary>
+    public string Confidence { get; init; } = "medium";
 }
 
 public sealed class DerivedBuildProfileDto
@@ -334,6 +367,18 @@ public sealed class DerivedExplorationDto
 {
     /// <summary>0–1 heuristic from unlocked fast-travel point count.</summary>
     public double EstimatedCoverage { get; init; }
+
+    /// <summary>Unlocked fast-travel nodes counted by exporter (raw list length).</summary>
+    public int FastTravelPointCount { get; init; }
+
+    /// <summary>Heuristic denominator for coverage ratio; not a game data total.</summary>
+    public int AssumedTotalFastTravelPoints { get; init; } = 50;
+
+    /// <summary>Heuristic AI-facing note: coverage is a fast-travel unlock proxy, not map completion.</summary>
+    public string Interpretation { get; init; } = "";
+
+    /// <summary>Heuristic AI-facing confidence for exploration proxy fields.</summary>
+    public string Confidence { get; init; } = "low";
 }
 
 public sealed class DerivedInventorySummaryDto
