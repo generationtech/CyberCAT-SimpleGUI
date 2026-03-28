@@ -13,6 +13,13 @@ public sealed class ExportSnapshot
     public DerivedSectionDto Derived { get; init; } = new();
 }
 
+/// <summary>Raw-only JSON projection: header and raw sections (no normalized / derived).</summary>
+public sealed class RawExportSnapshot
+{
+    public SaveHeaderDto Header { get; init; } = new();
+    public RawSectionDto Raw { get; init; } = new();
+}
+
 public sealed class SaveHeaderDto
 {
     public uint SaveVersion { get; init; }

@@ -5,7 +5,7 @@ namespace CP2077SaveExporter;
 /// <summary>Read-only JSON serialization to disk.</summary>
 public static class JsonExporter
 {
-    public static async Task WriteAsync(string path, ExportSnapshot snapshot, JsonSerializerOptions options, CancellationToken cancellationToken = default)
+    public static async Task WriteAsync<T>(string path, T value, JsonSerializerOptions options, CancellationToken cancellationToken = default)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir))
@@ -13,7 +13,7 @@ public static class JsonExporter
             Directory.CreateDirectory(dir);
         }
 
-        var json = JsonSerializer.Serialize(snapshot, options);
+        var json = JsonSerializer.Serialize(value, options);
         await File.WriteAllTextAsync(path, json, cancellationToken).ConfigureAwait(false);
     }
 }
