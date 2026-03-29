@@ -14,13 +14,15 @@ internal static class Program
     private const int ExitInitError = 3;
 
     private const string RawFileName = "save.raw.json";
-    private const string EnrichedFileName = "save.enriched.json";
+    private const string FullFileName = "save.full.json";
+    private const string InsightsFileName = "save.insights.json";
 
     private enum ExportOutputMode
     {
         Raw,
-        Enriched,
-        Both,
+        Full,
+        Insights,
+        Split,
     }
 
     private static async Task<int> Main(string[] args)
@@ -142,23 +144,40 @@ internal static class Program
             ? Directory.GetCurrentDirectory()
             : Path.GetFullPath(outputDirectory);
         var rawPath = Path.Combine(outDir, RawFileName);
-        var enrichedPath = Path.Combine(outDir, EnrichedFileName);
+        var fullPath = Path.Combine(outDir, FullFileName);
+        var insightsPath = Path.Combine(outDir, InsightsFileName);
 
-        if (mode == ExportOutputMode.Raw || mode == ExportOutputMode.Both)
+        var rawSnapshot = new RawExportSnapshot
         {
-            var rawView = new RawExportSnapshot
-            {
-                Header = snapshot.Header,
-                Raw = snapshot.Raw,
-            };
-            await JsonExporter.WriteAsync(rawPath, rawView, jsonOptions).ConfigureAwait(false);
-            Console.Error.WriteLine($"Wrote: {rawPath}");
-        }
+            Header = snapshot.Header,
+            Raw = snapshot.Raw,
+        };
+        var insightsSnapshot = new InsightsExportSnapshot
+        {
+            Normalized = snapshot.Normalized,
+            Derived = snapshot.Derived,
+        };
 
-        if (mode == ExportOutputMode.Enriched || mode == ExportOutputMode.Both)
+        switch (mode)
         {
-            await JsonExporter.WriteAsync(enrichedPath, snapshot, jsonOptions).ConfigureAwait(false);
-            Console.Error.WriteLine($"Wrote: {enrichedPath}");
+            case ExportOutputMode.Raw:
+                await JsonExporter.WriteAsync(rawPath, rawSnapshot, jsonOptions).ConfigureAwait(false);
+                Console.Error.WriteLine($"Wrote: {rawPath}");
+                break;
+            case ExportOutputMode.Full:
+                await JsonExporter.WriteAsync(fullPath, snapshot, jsonOptions).ConfigureAwait(false);
+                Console.Error.WriteLine($"Wrote: {fullPath}");
+                break;
+            case ExportOutputMode.Insights:
+                await JsonExporter.WriteAsync(insightsPath, insightsSnapshot, jsonOptions).ConfigureAwait(false);
+                Console.Error.WriteLine($"Wrote: {insightsPath}");
+                break;
+            case ExportOutputMode.Split:
+                await JsonExporter.WriteAsync(rawPath, rawSnapshot, jsonOptions).ConfigureAwait(false);
+                Console.Error.WriteLine($"Wrote: {rawPath}");
+                await JsonExporter.WriteAsync(insightsPath, insightsSnapshot, jsonOptions).ConfigureAwait(false);
+                Console.Error.WriteLine($"Wrote: {insightsPath}");
+                break;
         }
 
         return ExitOk;
@@ -167,12 +186,21 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.Error.WriteLine(
-            "Usage: CP2077SaveExporter [--mode raw|enriched|both] [--facts <path-to-Facts.json>] <path-to-sav.dat> [output-directory]");
-        Console.Error.WriteLine("Default mode: enriched");
+            "Usage:");
+        Console.Error.WriteLine(
+            "  CP2077SaveExporter [--mode raw|full|insights|split] [--facts <path-to-Facts.json>] <path-to-sav.dat> [output-directory]");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Default mode: full");
         Console.Error.WriteLine("Output directory defaults to the current working directory when omitted.");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("Modes:");
+        Console.Error.WriteLine($"  raw       — raw decoded data → {RawFileName}");
+        Console.Error.WriteLine($"  full      — raw + normalized + derived → {FullFileName}");
+        Console.Error.WriteLine($"  insights  — normalized + derived only → {InsightsFileName}");
+        Console.Error.WriteLine($"  split     — {RawFileName} + {InsightsFileName} (two files)");
+        Console.Error.WriteLine();
         Console.Error.WriteLine(
             "--facts overrides automatic Facts.json discovery; when omitted, Facts.json beside the running executable is used if present.");
-        Console.Error.WriteLine($"Files written: {RawFileName} and/or {EnrichedFileName}");
     }
 
     private static bool TryParseArgs(
@@ -184,19 +212,21 @@ internal static class Program
         out string? error)
     {
         savPath = "";
-        mode = ExportOutputMode.Enriched;
+        mode = ExportOutputMode.Full;
         outputDirectory = null;
         factsPathOverride = null;
         error = null;
 
-        var i = 0;
-        while (i < args.Length && args[i].Length > 0 && args[i][0] == '-')
+        var positionals = new List<string>();
+
+        for (var i = 0; i < args.Length;)
         {
-            if (args[i] == "--mode")
+            var a = args[i];
+            if (a == "--mode")
             {
                 if (i + 1 >= args.Length)
                 {
-                    error = "--mode requires a value (raw, enriched, or both).";
+                    error = "--mode requires a value (raw, full, insights, or split).";
                     return false;
                 }
 
@@ -206,14 +236,17 @@ internal static class Program
                     case "raw":
                         mode = ExportOutputMode.Raw;
                         break;
-                    case "enriched":
-                        mode = ExportOutputMode.Enriched;
+                    case "full":
+                        mode = ExportOutputMode.Full;
                         break;
-                    case "both":
-                        mode = ExportOutputMode.Both;
+                    case "insights":
+                        mode = ExportOutputMode.Insights;
+                        break;
+                    case "split":
+                        mode = ExportOutputMode.Split;
                         break;
                     default:
-                        error = $"Invalid --mode value: {args[i + 1]} (expected raw, enriched, or both)";
+                        error = $"Invalid --mode value: {args[i + 1]} (expected raw, full, insights, or split)";
                         return false;
                 }
 
@@ -221,7 +254,7 @@ internal static class Program
                 continue;
             }
 
-            if (args[i] == "--facts")
+            if (a == "--facts")
             {
                 if (i + 1 >= args.Length)
                 {
@@ -234,24 +267,29 @@ internal static class Program
                 continue;
             }
 
-            error = $"Unknown option: {args[i]}";
-            return false;
+            if (a.Length > 0 && a[0] == '-')
+            {
+                error = $"Unknown option: {a}";
+                return false;
+            }
+
+            positionals.Add(a);
+            i++;
         }
 
-        if (i >= args.Length)
+        if (positionals.Count == 0)
         {
             error = "Missing save path.";
             return false;
         }
 
-        var remaining = args.Length - i;
-        if (remaining > 2)
+        if (positionals.Count > 2)
         {
             error = "Unexpected extra arguments.";
             return false;
         }
 
-        savPath = args[i];
+        savPath = positionals[0];
         if (string.IsNullOrWhiteSpace(savPath))
         {
             error = "Missing save path.";
@@ -264,9 +302,9 @@ internal static class Program
             return false;
         }
 
-        if (remaining == 2)
+        if (positionals.Count == 2)
         {
-            var od = args[i + 1];
+            var od = positionals[1];
             if (string.IsNullOrWhiteSpace(od))
             {
                 error = "Invalid output directory.";

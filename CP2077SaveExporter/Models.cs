@@ -20,6 +20,13 @@ public sealed class RawExportSnapshot
     public RawSectionDto Raw { get; init; } = new();
 }
 
+/// <summary>Normalized + derived layers only (no header / raw).</summary>
+public sealed class InsightsExportSnapshot
+{
+    public required object Normalized { get; init; }
+    public required object Derived { get; init; }
+}
+
 public sealed class SaveHeaderDto
 {
     public uint SaveVersion { get; init; }
