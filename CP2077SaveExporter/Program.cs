@@ -39,7 +39,13 @@ internal static class Program
             return ExitOk;
         }
 
-        if (!TryParseArgs(args, out var savPath, out var mode, out var outputDirectory, out var parseError))
+        if (!TryParseArgs(
+                args,
+                out var savPath,
+                out var mode,
+                out var outputDirectory,
+                out var factsPathOverride,
+                out var parseError))
         {
             if (parseError != null)
             {
@@ -97,7 +103,9 @@ internal static class Program
         }
 
         IReadOnlyDictionary<uint, string>? knownFacts = null;
-        var factsPath = Path.Combine(AppContext.BaseDirectory, "Facts.json");
+        var factsPath = factsPathOverride != null
+            ? factsPathOverride
+            : Path.Combine(AppContext.BaseDirectory, "Facts.json");
         if (File.Exists(factsPath))
         {
             try
@@ -109,6 +117,11 @@ internal static class Program
             {
                 Console.Error.WriteLine("Warning: could not parse Facts.json; quest fact names will be omitted. " + ex.Message);
             }
+        }
+        else if (factsPathOverride != null)
+        {
+            Console.Error.WriteLine(
+                $"Warning: Facts.json not found at '{factsPath}'; quest fact names will be hash-only.");
         }
         else
         {
@@ -153,9 +166,12 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("Usage: CP2077SaveExporter [--mode raw|enriched|both] <path-to-sav.dat> [output-directory]");
+        Console.Error.WriteLine(
+            "Usage: CP2077SaveExporter [--mode raw|enriched|both] [--facts <path-to-Facts.json>] <path-to-sav.dat> [output-directory]");
         Console.Error.WriteLine("Default mode: enriched");
         Console.Error.WriteLine("Output directory defaults to the current working directory when omitted.");
+        Console.Error.WriteLine(
+            "--facts overrides automatic Facts.json discovery; when omitted, Facts.json beside the running executable is used if present.");
         Console.Error.WriteLine($"Files written: {RawFileName} and/or {EnrichedFileName}");
     }
 
@@ -164,114 +180,100 @@ internal static class Program
         out string savPath,
         out ExportOutputMode mode,
         out string? outputDirectory,
+        out string? factsPathOverride,
         out string? error)
     {
         savPath = "";
         mode = ExportOutputMode.Enriched;
         outputDirectory = null;
+        factsPathOverride = null;
         error = null;
 
-        if (args[0] == "--mode")
+        var i = 0;
+        while (i < args.Length && args[i].Length > 0 && args[i][0] == '-')
         {
-            if (args.Length is < 3 or > 4)
+            if (args[i] == "--mode")
             {
-                error = args.Length switch
+                if (i + 1 >= args.Length)
                 {
-                    1 => "--mode requires a mode value and a save path.",
-                    2 => "Missing save path.",
-                    _ => "Unexpected extra arguments.",
-                };
-                return false;
-            }
-
-            var m = args[1].ToLowerInvariant();
-            switch (m)
-            {
-                case "raw":
-                    mode = ExportOutputMode.Raw;
-                    break;
-                case "enriched":
-                    mode = ExportOutputMode.Enriched;
-                    break;
-                case "both":
-                    mode = ExportOutputMode.Both;
-                    break;
-                default:
-                    error = $"Invalid --mode value: {args[1]} (expected raw, enriched, or both)";
-                    return false;
-            }
-
-            savPath = args[2];
-            if (string.IsNullOrWhiteSpace(savPath))
-            {
-                error = "Missing save path.";
-                return false;
-            }
-
-            if (savPath.StartsWith('-'))
-            {
-                error = $"Unknown option: {savPath}";
-                return false;
-            }
-
-            if (args.Length == 4)
-            {
-                var od = args[3];
-                if (string.IsNullOrWhiteSpace(od))
-                {
-                    error = "Invalid output directory.";
+                    error = "--mode requires a value (raw, enriched, or both).";
                     return false;
                 }
 
-                if (od.StartsWith('-'))
+                var m = args[i + 1].ToLowerInvariant();
+                switch (m)
                 {
-                    error = $"Unknown option: {od}";
+                    case "raw":
+                        mode = ExportOutputMode.Raw;
+                        break;
+                    case "enriched":
+                        mode = ExportOutputMode.Enriched;
+                        break;
+                    case "both":
+                        mode = ExportOutputMode.Both;
+                        break;
+                    default:
+                        error = $"Invalid --mode value: {args[i + 1]} (expected raw, enriched, or both)";
+                        return false;
+                }
+
+                i += 2;
+                continue;
+            }
+
+            if (args[i] == "--facts")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    error = "--facts requires a path to Facts.json.";
                     return false;
                 }
 
-                outputDirectory = od;
+                factsPathOverride = args[i + 1];
+                i += 2;
+                continue;
             }
 
-            return true;
-        }
-
-        if (args.Length is < 1 or > 2)
-        {
-            error = args.Length > 2 && args[1] == "--mode"
-                ? "Invalid argument order: use CP2077SaveExporter [--mode raw|enriched|both] <path-to-sav.dat> [output-directory]"
-                : "Unexpected extra arguments.";
+            error = $"Unknown option: {args[i]}";
             return false;
         }
 
-        if (args.Length == 2 && args[1] == "--mode")
+        if (i >= args.Length)
         {
-            error = "Invalid argument order: use CP2077SaveExporter [--mode raw|enriched|both] <path-to-sav.dat> [output-directory]";
+            error = "Missing save path.";
             return false;
         }
 
-        if (args[0].StartsWith('-'))
+        var remaining = args.Length - i;
+        if (remaining > 2)
         {
-            error = $"Unknown option: {args[0]}";
+            error = "Unexpected extra arguments.";
             return false;
         }
 
-        savPath = args[0];
+        savPath = args[i];
         if (string.IsNullOrWhiteSpace(savPath))
         {
             error = "Missing save path.";
             return false;
         }
 
-        if (args.Length == 2)
+        if (savPath.Length > 0 && savPath[0] == '-')
         {
-            var od = args[1];
+            error = $"Unknown option: {savPath}";
+            return false;
+        }
+
+        if (remaining == 2)
+        {
+            var od = args[i + 1];
             if (string.IsNullOrWhiteSpace(od))
             {
                 error = "Invalid output directory.";
                 return false;
             }
 
-            if (od.StartsWith('-'))
+            if (od.Length > 0 && od[0] == '-')
             {
                 error = $"Unknown option: {od}";
                 return false;
